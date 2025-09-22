@@ -1,0 +1,22 @@
+{
+  "short_name": "MVCP Cellules",
+  "name": "MVCP-BENIN Cellules",
+  "description": "Outil numérique de collecte, suivi et analyse des rapports hebdomadaires des cellules de maison pour le Ministère de Vie Chrétienne Profonde au BENIN.",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1D4ED8",
+  "background_color": "#F3F4F6",
+  "gcm_sender_id": "103953800507"
+}

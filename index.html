@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20width=%22100%22%20height=%22100%22%20viewBox=%220%200%20100%22%20xmlns=%22http%3A//www.w3.org/2000/svg%22%3E%3Cdefs%3E%3ClinearGradient%20id=%22logo-gradient%22%20x1=%220%25%22%20y1=%220%25%22%20x2=%220%25%22%20y2=%22100%25%22%3E%3Cstop%20offset=%220%25%22%20stop-color=%22%233B82F6%22%20/%3E%3Cstop%20offset=%22100%25%22%20stop-color=%22%231D4ED8%22%20/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20fill=%22url(%23logo-gradient)%22%20d=%22M50%2010%20L10%2045%20V90%20H90%20V45%20L50%2010%20Z%22%20/%3E%3Crect%20x=%2245%22%20y=%220%22%20width=%2210%22%20height=%2220%22%20rx=%222%22%20fill=%22%23FBBF24%22%20/%3E%3Crect%20x=%2238%22%20y=%225%22%20width=%2224%22%20height=%2210%22%20rx=%222%22%20fill=%22%23FBBF24%22%20/%3E%3Cpath%20d=%22M42%2090%20V70%20C42%2060,%2058%2060,%2058%2070%20V90%20Z%22%20fill=%22white%22%20/%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MVCP-BENIN Cellules</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1D4ED8" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+      /* Custom scrollbar for better aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+      }
+      body {
+        overscroll-behavior-y: contain;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "recharts": "https://esm.sh/recharts@^3.1.2",
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.7.1",
+    "xlsx": "https://esm.sh/xlsx@0.18.5",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
