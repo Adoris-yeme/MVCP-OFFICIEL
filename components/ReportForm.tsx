@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Report, InvitedPerson, Visit } from '../types.ts';
-import { api } from '../services/api.ts';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Report, InvitedPerson, Visit, Cell, Group, District } from '../types.ts';
+import { api, getLocalStorageItem } from '../services/api.ts';
 import { PlusCircleIcon, TrashIcon, SpinnerIcon } from './icons.tsx';
 import { useToast } from '../contexts/ToastContext.tsx';
 import { REGIONS, CELL_CATEGORIES } from '../constants.ts';
@@ -69,6 +69,17 @@ const ReportForm: React.FC = () => {
     const [step, setStep] = useState(1);
     const { showToast } = useToast();
 
+    // State for hierarchy data
+    const [allCells, setAllCells] = useState<Cell[]>([]);
+    const [allGroups, setAllGroups] = useState<Group[]>([]);
+    const [allDistricts, setAllDistricts] = useState<District[]>([]);
+
+    useEffect(() => {
+        setAllCells(getLocalStorageItem<Cell[]>('cells', []));
+        setAllGroups(getLocalStorageItem<Group[]>('groups', []));
+        setAllDistricts(getLocalStorageItem<District[]>('districts', []));
+    }, []);
+
     const calculatedStats = useMemo(() => {
         const registeredMembers = Number(formData.registeredMen) + Number(formData.registeredWomen) + Number(formData.registeredChildren);
         const absentees = Math.max(0, registeredMembers - Number(formData.attendees));
@@ -76,11 +87,66 @@ const ReportForm: React.FC = () => {
         return { registeredMembers, absentees, totalPresent };
     }, [formData]);
 
+    // --- Data for dependent dropdowns ---
+    const groupsInRegion = useMemo(() => {
+        if (!formData.region) return [];
+        return [...new Set(allGroups.filter(g => g.region === formData.region).map(g => g.name))].sort();
+    }, [formData.region, allGroups]);
+
+    const districtsInGroup = useMemo(() => {
+        if (!formData.region || !formData.group) return [];
+        return [...new Set(allDistricts.filter(d => d.region === formData.region && d.group === formData.group).map(d => d.name))].sort();
+    }, [formData.region, formData.group, allDistricts]);
+
+    const cellsInDistrict = useMemo(() => {
+        if (!formData.region || !formData.group || !formData.district) return [];
+        return allCells.filter(c => c.region === formData.region && c.group === formData.group && c.district === formData.district).sort((a,b) => a.cellName.localeCompare(b.cellName));
+    }, [formData.region, formData.group, formData.district, allCells]);
+
+
     // --- Change Handlers ---
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
-        const finalValue = e.target.type === 'number' ? (parseInt(value, 10) || 0) : value;
-        setFormData(prev => ({ ...prev, [name]: finalValue }));
+        
+        setFormData(prev => {
+            const finalValue = e.target.type === 'number' ? Number(value) : value;
+            const newState = { ...prev, [name]: finalValue };
+
+            if (name === 'region') {
+                newState.group = '';
+                newState.district = '';
+                newState.cellName = '';
+                newState.cellCategory = '';
+                newState.leaderName = '';
+                newState.leaderContact = '';
+            }
+            if (name === 'group') {
+                newState.district = '';
+                newState.cellName = '';
+                newState.cellCategory = '';
+                newState.leaderName = '';
+                newState.leaderContact = '';
+            }
+            if (name === 'district') {
+                newState.cellName = '';
+                newState.cellCategory = '';
+                newState.leaderName = '';
+                newState.leaderContact = '';
+            }
+            return newState;
+        });
+    };
+
+    const handleCellChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const cellId = e.target.value;
+        const selectedCell = allCells.find(c => c.id === cellId);
+        setFormData(prev => ({
+            ...prev,
+            cellName: selectedCell?.cellName || '',
+            cellCategory: selectedCell?.cellCategory || '',
+            leaderName: selectedCell?.leaderName || '',
+            leaderContact: selectedCell?.leaderContact || '',
+        }));
     };
     
     const handleInvitedChange = (index: number, field: keyof Omit<InvitedPerson, 'id'>, value: string) => {
@@ -111,7 +177,7 @@ const ReportForm: React.FC = () => {
       if (stepToValidate === 2) {
         const registered = calculatedStats.registeredMembers;
         if (registered < Number(formData.attendees)) {
-            showToast("Le nombre de présents ne peut être supérieur au nombre d'inscrits.", 'error');
+            showToast("Le nombre de présents ne peut être supérieur au nombre de membres sur la liste.", 'error');
             if (redirectOnError) setStep(2);
             return false;
         }
@@ -179,15 +245,24 @@ const ReportForm: React.FC = () => {
                 </div>
                 <div>
                     <label htmlFor="group" className={labelClass}>Groupe</label>
-                    <input type="text" name="group" id="group" value={formData.group} onChange={handleChange} className={inputClass} required placeholder="Ex: Groupe de Gbegamey" />
+                    <select name="group" id="group" value={formData.group} onChange={handleChange} className={inputClass} required disabled={!formData.region}>
+                        <option value="">-- Sélectionner un groupe --</option>
+                        {groupsInRegion.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
                 </div>
                 <div>
                     <label htmlFor="district" className={labelClass}>District</label>
-                    <input type="text" name="district" id="district" value={formData.district} onChange={handleChange} className={inputClass} required placeholder="Ex: District de Cadjehoun" />
+                    <select name="district" id="district" value={formData.district} onChange={handleChange} className={inputClass} required disabled={!formData.group}>
+                         <option value="">-- Sélectionner un district --</option>
+                         {districtsInGroup.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                 </div>
                  <div>
-                    <label htmlFor="cellName" className={labelClass}>Nom de la cellule</label>
-                    <input type="text" name="cellName" id="cellName" value={formData.cellName} onChange={handleChange} className={inputClass} required placeholder="Ex: Cellule des Rachetés" />
+                    <label htmlFor="cellId" className={labelClass}>Nom de la cellule</label>
+                     <select id="cellId" name="cellId" value={cellsInDistrict.find(c => c.cellName === formData.cellName)?.id || ''} onChange={handleCellChange} className={inputClass} required disabled={!formData.district}>
+                         <option value="">-- Sélectionner une cellule --</option>
+                         {cellsInDistrict.map(c => <option key={c.id} value={c.id}>{c.cellName}</option>)}
+                    </select>
                 </div>
                  <div>
                     <label htmlFor="cellCategory" className={labelClass}>Catégorie de la cellule</label>
@@ -198,7 +273,7 @@ const ReportForm: React.FC = () => {
                 </div>
             </div>
              <div className="p-4 bg-gray-50 rounded-lg border animate-fade-in">
-                <h4 className="font-semibold text-gray-800">Informations du Responsable</h4>
+                <h4 className="font-semibold text-gray-800">Informations du Responsable (pré-remplies)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-2">
                     <div>
                        <label htmlFor="leaderName" className={labelClass}>Nom du Responsable</label>
@@ -243,9 +318,9 @@ const ReportForm: React.FC = () => {
             <div className="p-4 border rounded-lg bg-gray-50">
                 <h4 className="font-bold text-gray-800 mb-2">Statistiques</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                    <p><strong className="text-gray-600">Total Inscrits:</strong> {calculatedStats.registeredMembers}</p>
-                    <p><strong className="text-gray-600">Présents (inscrits):</strong> {formData.attendees}</p>
-                    <p><strong className="text-gray-600">Absents (inscrits):</strong> {calculatedStats.absentees}</p>
+                    <p><strong className="text-gray-600">Total sur Liste:</strong> {calculatedStats.registeredMembers}</p>
+                    <p><strong className="text-gray-600">Présents (sur liste):</strong> {formData.attendees}</p>
+                    <p><strong className="text-gray-600">Absents (sur liste):</strong> {calculatedStats.absentees}</p>
                     <p><strong className="text-gray-600">Invités:</strong> {formData.invitedPeople.length}</p>
                     <p className="font-bold"><strong className="text-gray-600">Total ce Jour:</strong> {calculatedStats.totalPresent}</p>
                 </div>
@@ -305,7 +380,7 @@ const ReportForm: React.FC = () => {
             <section className="space-y-6 animate-fade-in">
               <h3 className={sectionTitleClass}>Étape 2: Statistiques des membres</h3>
               <div>
-                <h4 className="text-md font-semibold text-gray-700 mb-2">Membres Inscrits</h4>
+                <h4 className="text-md font-semibold text-gray-700 mb-2">Membres sur Liste</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-4 border rounded-md bg-gray-50">
                     <div>
                         <label htmlFor="registeredMen" className={labelClass}>👨 Hommes</label>
@@ -320,7 +395,7 @@ const ReportForm: React.FC = () => {
                         <input type="number" name="registeredChildren" id="registeredChildren" value={formData.registeredChildren} onChange={handleChange} min="0" className={inputClass} />
                     </div>
                     <div>
-                        <label htmlFor="registeredTotal" className={labelClass}>∑ Total Inscrits</label>
+                        <label htmlFor="registeredTotal" className={labelClass}>∑ Total sur Liste</label>
                         <input type="number" name="registeredTotal" id="registeredTotal" value={calculatedStats.registeredMembers} className={`${inputClass} bg-gray-100 font-bold`} readOnly />
                     </div>
                 </div>
@@ -330,11 +405,11 @@ const ReportForm: React.FC = () => {
                 <h4 className="text-md font-semibold text-gray-700 mb-2">Participation ce jour</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                     <div>
-                        <label htmlFor="attendees" className={labelClass}>✅ Présents (inscrits)</label>
+                        <label htmlFor="attendees" className={labelClass}>✅ Présents (sur liste)</label>
                         <input type="number" name="attendees" id="attendees" value={formData.attendees} onChange={handleChange} min="0" className={inputClass} />
                     </div>
                     <div>
-                        <label htmlFor="absentees" className={labelClass}>❌ Absents (inscrits)</label>
+                        <label htmlFor="absentees" className={labelClass}>❌ Absents (sur liste)</label>
                         <input type="number" name="absentees" id="absentees" value={calculatedStats.absentees} className={`${inputClass} bg-gray-100`} readOnly />
                     </div>
                     <div>

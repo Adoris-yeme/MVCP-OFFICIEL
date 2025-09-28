@@ -60,9 +60,9 @@ const ReportDetailModal: React.FC<ReportDetailModalProps> = ({ report, onClose, 
                         <h4 className="font-semibold text-gray-700 mb-2">Statistiques</h4>
                         <div className="border-t border-gray-200">
                             <dl className="divide-y divide-gray-200">
-                                <DetailRow label="Membres inscrits" value={`${registeredTotal} (H: ${report.registeredMen}, F: ${report.registeredWomen}, E: ${report.registeredChildren})`} />
-                                <DetailRow label="Présents (inscrits)" value={report.attendees} />
-                                <DetailRow label="Absents (inscrits)" value={report.absentees} />
+                                <DetailRow label="Membres sur Liste" value={`${registeredTotal} (H: ${report.registeredMen}, F: ${report.registeredWomen}, E: ${report.registeredChildren})`} />
+                                <DetailRow label="Présents (sur liste)" value={report.attendees} />
+                                <DetailRow label="Absents (sur liste)" value={report.absentees} />
                                 <DetailRow label="Total présents ce jour" value={report.totalPresent} />
                             </dl>
                         </div>

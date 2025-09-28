@@ -81,7 +81,8 @@ const BeninMap: React.FC<BeninMapProps> = ({ cellData }) => {
     // 2. Determine the color scale
     const maxCells = useMemo(() => {
         const values = Object.values(departmentData);
-        return values.length > 0 ? Math.max(...values, 1) : 1; // Avoid division by zero
+        // FIX: Cast `values` to number[] to resolve 'Argument of type 'unknown' is not assignable to parameter of type 'number'' error.
+        return values.length > 0 ? Math.max(...(values as number[]), 1) : 1; // Avoid division by zero
     }, [departmentData]);
 
     const getColor = (departmentName: string) => {

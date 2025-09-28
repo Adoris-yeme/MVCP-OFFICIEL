@@ -254,7 +254,7 @@ const ReportPDF = forwardRef<HTMLDivElement, ReportPDFProps>(({ user, stats, dat
 
             <div className="grid grid-cols-4 gap-4 text-center mb-8">
                 <div className="bg-gray-100 p-3 rounded-lg"><p className="text-xs text-gray-500">Rapports Soumis</p><p className="text-xl font-bold">{stats.totalReports}</p></div>
-                <div className="bg-gray-100 p-3 rounded-lg"><p className="text-xs text-gray-500">Membres Inscrits</p><p className="text-xl font-bold">{stats.totalMembers}</p></div>
+                <div className="bg-gray-100 p-3 rounded-lg"><p className="text-xs text-gray-500">Membres sur Liste</p><p className="text-xl font-bold">{stats.totalMembers}</p></div>
                 <div className="bg-gray-100 p-3 rounded-lg"><p className="text-xs text-gray-500">Nouveaux Invités</p><p className="text-xl font-bold">{stats.newMembers}</p></div>
                 <div className="bg-gray-100 p-3 rounded-lg"><p className="text-xs text-gray-500">Visites Effectuées</p><p className="text-xl font-bold">{stats.totalVisits}</p></div>
             </div>
@@ -306,7 +306,7 @@ const MembersByRegionModal: React.FC<{
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4" onClick={onClose}>
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h3 className="text-xl font-bold text-gray-800">Détail des Membres Inscrits par Région</h3>
+                    <h3 className="text-xl font-bold text-gray-800">Détail des Membres sur Liste par Région</h3>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-3xl leading-none">&times;</button>
                 </div>
                 <div className="p-6 overflow-y-auto">
@@ -413,6 +413,25 @@ const DrillDownModal: React.FC<{
     );
 };
 
+// Helper to get a date range for a specific calendar week (Mon-Sun)
+const getWeekDateRange = (weekOffset: number) => { // 0 = this week, 1 = last week, etc.
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 (Sun) to 6 (Sat)
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Get to the most recent Monday
+
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() + mondayOffset - (weekOffset * 7));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return {
+        start: startOfWeek.toISOString().split('T')[0],
+        end: endOfWeek.toISOString().split('T')[0],
+    };
+};
 
 // --- MAIN DASHBOARD COMPONENT ---
 
@@ -430,6 +449,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [drillDownData, setDrillDownData] = useState<{ region: string } | null>(null);
   const [featuredTestimonyId, setFeaturedTestimonyId] = useState(() => getLocalStorageItem<string | null>('featured_testimony_id', null));
+  const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
 
 
   const pdfRef = useRef<HTMLDivElement>(null);
@@ -499,6 +519,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     const selectedRegion = e.target.value;
     setReportsPage(1);
     setNewMembersPage(1);
+    setSelectedCellId(null);
     if (selectedRegion === 'all') {
         navigate('/admin', { replace: true });
     } else {
@@ -516,15 +537,36 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     setNewMembersSearch('');
     setReportsPage(1);
     setNewMembersPage(1);
+    setSelectedCellId(null);
     navigate('/admin', { replace: true });
   };
   
-    const handleQuickFilter = (period: 'week' | 'month' | 'quarter') => {
+    const handleQuickFilter = (period: 'week' | 'last-week' | 'two-weeks-ago' | 'month' | 'quarter') => {
+        if (period === 'week') {
+            const today = new Date();
+            const start = new Date();
+            start.setDate(today.getDate() - 6); // Last 7 days
+            setDateRange({
+                start: start.toISOString().split('T')[0],
+                end: today.toISOString().split('T')[0],
+            });
+            return;
+        }
+        if (period === 'last-week') {
+            const { start, end } = getWeekDateRange(1);
+            setDateRange({ start, end });
+            return;
+        }
+        if (period === 'two-weeks-ago') {
+            const { start, end } = getWeekDateRange(2);
+            setDateRange({ start, end });
+            return;
+        }
+        
+        // For month and quarter, use period ending today
         const end = new Date();
         const start = new Date();
-        if (period === 'week') {
-            start.setDate(end.getDate() - 7);
-        } else if (period === 'month') {
+        if (period === 'month') {
             start.setMonth(end.getMonth() - 1);
         } else if (period === 'quarter') {
             start.setMonth(end.getMonth() - 3);
@@ -551,11 +593,23 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     const isDateChanged = dateRange.start !== initialDateRange.start || dateRange.end !== initialDateRange.end;
     const isSearchActive = reportsSearch !== '' || newMembersSearch !== '';
     const isRegionFiltered = !!regionFilter;
-    return isDateChanged || isSearchActive || isRegionFiltered;
-  }, [dateRange, reportsSearch, newMembersSearch, regionFilter, initialDateRange]);
+    const isCellFiltered = !!selectedCellId;
+    return isDateChanged || isSearchActive || isRegionFiltered || isCellFiltered;
+  }, [dateRange, reportsSearch, newMembersSearch, regionFilter, selectedCellId, initialDateRange]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleCellSelection = (cellId: string) => {
+    // If clicking the same cell again, deselect it
+    if (selectedCellId === cellId) {
+        setSelectedCellId(null);
+    } else {
+        setSelectedCellId(cellId);
+        // Use setTimeout to ensure the DOM has updated before scrolling
+        setTimeout(() => scrollTo('reports-list'), 100);
+    }
   };
 
   // --- DERIVED DATA & FILTERS ---
@@ -699,26 +753,78 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   }, [reportsToAnalyze]);
   
-  const paginatedReports = useMemo(() => {
-    const filtered = reportsToAnalyze.filter(r => !reportsSearch || 
-        r.leaderName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
-        r.cellName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
-        r.region.toLowerCase().includes(reportsSearch.toLowerCase()) ||
-        r.group.toLowerCase().includes(reportsSearch.toLowerCase()) ||
-        r.district.toLowerCase().includes(reportsSearch.toLowerCase())
-    );
-    return filtered.slice((reportsPage - 1) * ITEMS_PER_PAGE, reportsPage * ITEMS_PER_PAGE);
-  }, [reportsToAnalyze, reportsSearch, reportsPage]);
-  
-  const totalFilteredReports = useMemo(() => {
-     return reportsToAnalyze.filter(r => !reportsSearch || 
-        r.leaderName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
-        r.cellName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
-        r.region.toLowerCase().includes(reportsSearch.toLowerCase()) ||
-        r.group.toLowerCase().includes(reportsSearch.toLowerCase()) ||
-        r.district.toLowerCase().includes(reportsSearch.toLowerCase())
-    ).length;
-  }, [reportsToAnalyze, reportsSearch]);
+  const allReportsForTrend = useMemo(() => getLocalStorageItem<Report[]>('reports', []), []);
+  const allCells = useMemo(() => getLocalStorageItem<CellType[]>('cells', []), []);
+
+  const summaryDataByCell = useMemo(() => {
+        if (reportsToAnalyze.length === 0) return [];
+        
+        const dataMap: { [key: string]: {
+            cellId: string,
+            cellName: string,
+            leaderName: string,
+            reportsCount: number;
+            totalPresent: number;
+            newMembers: number;
+        } } = {};
+
+        reportsToAnalyze.forEach(report => {
+            const cell = allCells.find(c => c.region === report.region && c.group === report.group && c.district === report.district && c.cellName === report.cellName);
+            const cellId = cell ? cell.id : report.cellName; 
+
+            if (!dataMap[cellId]) {
+                dataMap[cellId] = {
+                    cellId: cellId,
+                    cellName: report.cellName,
+                    leaderName: report.leaderName,
+                    reportsCount: 0,
+                    totalPresent: 0,
+                    newMembers: 0,
+                };
+            }
+            dataMap[cellId].reportsCount += 1;
+            dataMap[cellId].totalPresent += report.totalPresent;
+            dataMap[cellId].newMembers += report.invitedPeople.length;
+        });
+
+        return Object.values(dataMap).map(d => ({
+            ...d,
+            avgAttendance: Math.round(d.totalPresent / d.reportsCount)
+        })).sort((a,b) => a.cellName.localeCompare(b.cellName));
+    }, [reportsToAnalyze, allCells]);
+
+    const filteredAndSearchedReports = useMemo(() => {
+        return reportsToAnalyze.filter(r => !reportsSearch || 
+            r.leaderName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
+            r.cellName.toLowerCase().includes(reportsSearch.toLowerCase()) || 
+            r.region.toLowerCase().includes(reportsSearch.toLowerCase()) ||
+            r.group.toLowerCase().includes(reportsSearch.toLowerCase()) ||
+            r.district.toLowerCase().includes(reportsSearch.toLowerCase())
+        );
+    }, [reportsToAnalyze, reportsSearch]);
+
+    const finalFilteredReports = useMemo(() => {
+        if (!selectedCellId) return filteredAndSearchedReports;
+
+        const selectedCell = allCells.find(c => c.id === selectedCellId);
+        if (!selectedCell) return filteredAndSearchedReports;
+
+        return filteredAndSearchedReports.filter(r => 
+            r.region === selectedCell.region &&
+            r.group === selectedCell.group &&
+            r.district === selectedCell.district &&
+            r.cellName === selectedCell.cellName
+        );
+    }, [filteredAndSearchedReports, selectedCellId, allCells]);
+
+    const paginatedReports = useMemo(() => {
+        return finalFilteredReports.slice((reportsPage - 1) * ITEMS_PER_PAGE, reportsPage * ITEMS_PER_PAGE);
+    }, [finalFilteredReports, reportsPage]);
+    
+    const totalFilteredReports = useMemo(() => {
+        return finalFilteredReports.length;
+    }, [finalFilteredReports]);
+
 
   const paginatedNewMembers = useMemo(() => {
     const allNewMembers = reportsToAnalyze.flatMap(report => 
@@ -736,9 +842,6 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     return allNewMembers.filter(p => !newMembersSearch || p.name.toLowerCase().includes(newMembersSearch.toLowerCase()) || p.leaderName.toLowerCase().includes(newMembersSearch.toLowerCase()) || p.region.toLowerCase().includes(newMembersSearch.toLowerCase())).length;
   }, [reportsToAnalyze, newMembersSearch]);
   
-  const allReportsForTrend = useMemo(() => getLocalStorageItem<Report[]>('reports', []), []);
-  const allCells = useMemo(() => getLocalStorageItem<CellType[]>('cells', []), []);
-
   const regionalTrends = useMemo(() => {
     if (user.role !== UserRole.NATIONAL_COORDINATOR) return null;
     return calculateTrend(allReportsForTrend);
@@ -816,10 +919,10 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         "Catégorie": r.cellCategory,
         "Responsable": r.leaderName, 
         "Contact Responsable": r.leaderContact, 
-        "Inscrits Hommes": r.registeredMen,
-        "Inscrits Femmes": r.registeredWomen,
-        "Inscrits Enfants": r.registeredChildren,
-        "Total Inscrits": r.registeredMen + r.registeredWomen + r.registeredChildren,
+        "Sur Liste Hommes": r.registeredMen,
+        "Sur Liste Femmes": r.registeredWomen,
+        "Sur Liste Enfants": r.registeredChildren,
+        "Total sur Liste": r.registeredMen + r.registeredWomen + r.registeredChildren,
         "Présents": r.attendees, 
         "Absents": r.absentees, 
         "Total Présents Jour": r.totalPresent, 
@@ -905,8 +1008,10 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const renderTrendAnalysisPanel = () => {
     if (!regionalTrends) return null;
 
-    const redZones = Object.entries(regionalTrends).filter(([, data]) => data.status === 'decline');
-    const orangeZones = Object.entries(regionalTrends).filter(([, data]) => data.status === 'stagnation');
+    // FIX: Cast `data` to TrendData to resolve 'status' property does not exist on type 'unknown' error.
+    const redZones = Object.entries(regionalTrends).filter(([, data]) => (data as TrendData).status === 'decline');
+    // FIX: Cast `data` to TrendData to resolve 'status' property does not exist on type 'unknown' error.
+    const orangeZones = Object.entries(regionalTrends).filter(([, data]) => (data as TrendData).status === 'stagnation');
 
     if (redZones.length === 0 && orangeZones.length === 0) return null;
 
@@ -921,7 +1026,8 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                             {redZones.map(([region, data]) => (
                                 <li key={region}>
                                     <button onClick={() => setDrillDownData({ region })} className="text-left hover:underline">
-                                        {region} <span className="font-bold">({data.change?.toFixed(0)}%)</span>
+                                        {/* FIX: Cast `data` to TrendData to resolve 'change' property does not exist on type 'unknown' error. */}
+                                        {region} <span className="font-bold">({(data as TrendData).change?.toFixed(0)}%)</span>
                                     </button>
                                 </li>
                             ))}
@@ -935,7 +1041,8 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                             {orangeZones.map(([region, data]) => (
                                 <li key={region}>
                                     <button onClick={() => setDrillDownData({ region })} className="text-left hover:underline">
-                                        {region} <span className="font-bold">({data.change?.toFixed(0)}%)</span>
+                                        {/* FIX: Cast `data` to TrendData to resolve 'change' property does not exist on type 'unknown' error. */}
+                                        {region} <span className="font-bold">({(data as TrendData).change?.toFixed(0)}%)</span>
                                     </button>
                                 </li>
                             ))}
@@ -953,6 +1060,8 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         return <EmptyState onReset={handleResetFilters} />;
     }
 
+    const selectedCellData = selectedCellId ? allCells.find(c => c.id === selectedCellId) : null;
+
     return (
         <div className="space-y-8">
             {user.role === UserRole.NATIONAL_COORDINATOR && renderTrendAnalysisPanel()}
@@ -966,7 +1075,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             
             <div className={`grid grid-cols-1 md:grid-cols-2 ${user.role === UserRole.NATIONAL_COORDINATOR ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6`}>
                 <StatCard title="Rapports Soumis" value={stats.totalReports} icon={<ChartBarIcon className="h-8 w-8 text-blue-600"/>} onClick={() => scrollTo('reports-list')} />
-                <StatCard title="Membres Inscrits" value={stats.totalMembers} icon={<UsersIcon className="h-8 w-8 text-blue-600"/>} onClick={() => setIsMembersModalOpen(true)} />
+                <StatCard title="Membres sur Liste" value={stats.totalMembers} icon={<UsersIcon className="h-8 w-8 text-blue-600"/>} onClick={() => setIsMembersModalOpen(true)} />
                 <StatCard title={attendanceTitle} value={attendanceValue} icon={<CheckCircleIcon className="h-8 w-8 text-blue-600"/>} />
                 <StatCard title="Nouveaux Invités" value={stats.newMembers} icon={<UsersIcon className="h-8 w-8 text-blue-600"/>} onClick={() => scrollTo('new-members-list')} />
                  {user.role === UserRole.NATIONAL_COORDINATOR && cellStatusCounts && (
@@ -1068,6 +1177,39 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                 </div>
             </div>
 
+            {summaryDataByCell.length > 0 && (
+                <div className="bg-white p-6 rounded-xl shadow-md" id="cell-summary-list">
+                    <h3 className="font-semibold text-gray-700 mb-4">Résumé par Cellule <span className="text-sm font-normal text-gray-500">(cliquez sur une ligne pour filtrer les rapports)</span></h3>
+                    <div className="overflow-x-auto">
+                         <table className="w-full text-sm text-left text-gray-600">
+                            <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-3">Cellule</th>
+                                    <th className="px-4 py-3 text-center">Rapports</th>
+                                    <th className="px-4 py-3 text-center">Présence Moy.</th>
+                                    <th className="px-4 py-3 text-center">Nouveaux Invités</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {summaryDataByCell.map(cell => (
+                                    <tr 
+                                        key={cell.cellId} 
+                                        onClick={() => handleCellSelection(cell.cellId)} 
+                                        className={`border-b cursor-pointer transition-colors duration-200 ${selectedCellId === cell.cellId ? 'bg-blue-100 hover:bg-blue-200' : 'bg-white hover:bg-blue-50'}`}
+                                        title="Cliquez pour voir les rapports de cette cellule"
+                                    >
+                                        <td className="px-4 py-3 font-medium text-gray-900">{cell.cellName} <span className="text-gray-500">({cell.leaderName})</span></td>
+                                        <td className="px-4 py-3 text-center">{cell.reportsCount}</td>
+                                        <td className="px-4 py-3 text-center">{cell.avgAttendance}</td>
+                                        <td className="px-4 py-3 text-center">{cell.newMembers}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
              {poignantTestimonies.length > 0 && (
                 <div className="bg-white p-6 rounded-xl shadow-md" id="testimonies-list">
                     <h3 className="font-semibold text-gray-700 mb-4">Témoignages Poignants</h3>
@@ -1107,6 +1249,12 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                     <h3 className="font-semibold text-gray-700">Rapports Récents</h3>
                     <input type="text" placeholder="Rechercher..." value={reportsSearch} onChange={e => setReportsSearch(e.target.value)} className="p-2 border rounded-md w-64"/>
                 </div>
+                {selectedCellId && selectedCellData && (
+                    <div className="bg-blue-50 p-3 rounded-lg flex justify-between items-center text-blue-800 animate-fade-in mb-4">
+                        <span>Filtre activé pour la cellule : <strong className="font-semibold">{selectedCellData.cellName}</strong></span>
+                        <button onClick={() => setSelectedCellId(null)} className="text-sm font-semibold hover:underline">Effacer le filtre</button>
+                    </div>
+                )}
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left text-gray-600">
                          <thead className="text-xs text-gray-700 uppercase bg-gray-50">
@@ -1139,6 +1287,7 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                             ))}
                         </tbody>
                     </table>
+                     {paginatedReports.length === 0 && <p className="text-center text-gray-500 py-4">Aucun rapport trouvé pour cette sélection.</p>}
                 </div>
                 <Pagination currentPage={reportsPage} totalItems={totalFilteredReports} onPageChange={setReportsPage} />
             </div>
@@ -1213,7 +1362,9 @@ const Dashboard: React.FC<{ user: User }> = ({ user }) => {
              {user.role === UserRole.NATIONAL_COORDINATOR && (
                 <div className="mt-4 flex flex-wrap gap-2">
                     <span className="text-sm font-medium text-gray-700 self-center">Filtres rapides:</span>
-                    <button onClick={() => handleQuickFilter('week')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">Cette semaine</button>
+                    <button onClick={() => handleQuickFilter('week')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">7 derniers jours</button>
+                    <button onClick={() => handleQuickFilter('last-week')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">Semaine dernière</button>
+                    <button onClick={() => handleQuickFilter('two-weeks-ago')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">Il y a 2 semaines</button>
                     <button onClick={() => handleQuickFilter('month')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">Ce mois-ci</button>
                     <button onClick={() => handleQuickFilter('quarter')} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-1 px-3 rounded-full">Ce trimestre</button>
                 </div>
